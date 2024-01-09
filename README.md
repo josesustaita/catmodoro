@@ -20,7 +20,7 @@ Follow these steps to install the Catmodoro Timer:
 1. Clone the repository:
    ```bash
    git clone https://github.com/josesustaita/catmodoro.git
-   cd catmodoro-timer
+   cd catmodoro
    ```
 
 2. Compile the project using Cargo:
@@ -35,13 +35,13 @@ Follow these steps to install the Catmodoro Timer:
 Run the timer with the default setting (25 minutes) by executing the binary:
 
 ```bash
-./catmodoro_timer
+./catmodoro
 ```
 
 For a custom session length, use the `-d` or `--duration` flag with the desired number of minutes:
 
 ```bash
-./catmodoro_timer -d 15
+./catmodoro -d 15
 ```
 
 ### Controls
