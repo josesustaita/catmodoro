@@ -72,22 +72,24 @@ impl PomodoroApp {
             };
             let remaining_secs = self.duration * 60 - elapsed;
 
-            let color = match remaining_secs as f64 / (self.duration * 60) as f64 {
-                r if r > 0.66 => Color::Magenta,
-                r if r > 0.33 => Color::Cyan,
-                _ => Color::LightCyan,
+            let percentage = (remaining_secs as f64 / (self.duration * 60) as f64) * 100.0;
+
+            let color = match percentage {
+                r if r > 66.0 => Color::LightMagenta,
+                r if r > 33.0 => Color::LightCyan,
+                _ => Color::LightRed,
             };
 
             let label = if remaining_secs >= 60 {
                 format!("{:02}:{:02}", remaining_secs / 60, remaining_secs % 60)
             } else {
-                format!("{:02}", remaining_secs)
+                format!("00:{:02}", remaining_secs)
             };
 
             let gauge = Gauge::default()
                 .block(block)
                 .gauge_style(Style::default().fg(color))
-                .percent(remaining_secs as u16 * 100 / (self.duration * 60) as u16)
+                .percent(percentage as u16)
                 .label(label);
             f.render_widget(gauge, size);
         })?;
