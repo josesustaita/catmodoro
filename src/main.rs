@@ -1,177 +1,253 @@
-use clap::{App as ClapApp, Arg};
+use clap::{App, Arg};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
     error::Error,
-    io, panic,
+    io,
     time::{Duration, Instant},
 };
 use tui::{
     backend::{Backend, CrosstermBackend},
-    style::{Color, Style},
-    widgets::{Block, Borders, Gauge},
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    widgets::{Block, Borders, Gauge, Paragraph},
     Terminal,
 };
 
 struct PomodoroApp {
-    duration: u64,
-    start_time: Instant,
-    pause_time: Option<Instant>,
-    finished: bool,
+    total: Duration,
+    remaining: Duration,
+    last_tick: Instant,
     paused: bool,
+    animate: bool,
+    frame: u64,
 }
 
 impl PomodoroApp {
-    fn new(duration: u64) -> PomodoroApp {
-        PomodoroApp {
-            duration,
-            start_time: Instant::now(),
-            pause_time: None,
-            finished: false,
+    fn new(minutes: u64, animate: bool) -> Self {
+        let total = Duration::from_secs(minutes * 60);
+        Self {
+            total,
+            remaining: total,
+            last_tick: Instant::now(),
             paused: false,
+            animate,
+            frame: 0,
         }
     }
 
-    fn advance(&mut self) {
-        if !self.paused
-            && Instant::now().duration_since(self.start_time).as_secs() >= self.duration * 60
-        {
-            self.finished = true;
+    fn tick(&mut self, now: Instant) {
+        if !self.paused {
+            self.remaining = self
+                .remaining
+                .saturating_sub(now.saturating_duration_since(self.last_tick));
+            self.frame = self.frame.wrapping_add(1);
         }
+        self.last_tick = now;
     }
 
-    fn toggle_pause(&mut self) {
+    fn toggle_pause(&mut self, now: Instant) {
+        self.tick(now);
         self.paused = !self.paused;
-        if self.paused {
-            self.pause_time = Some(Instant::now());
-        } else {
-            if let Some(pause_time) = self.pause_time {
-                let pause_duration = pause_time.elapsed();
-                self.start_time += pause_duration;
-            }
-            self.pause_time = None;
-        }
     }
 
-    fn draw<B: Backend>(&self, terminal: &mut Terminal<B>) -> Result<(), Box<dyn Error>> {
-        terminal.draw(|f| {
-            let size = f.size();
-            let block = Block::default()
-                .title("Catmodoro Timer")
-                .borders(Borders::ALL);
-            let elapsed = if self.paused && self.pause_time.is_some() {
-                self.pause_time
-                    .unwrap()
-                    .duration_since(self.start_time)
-                    .as_secs()
-            } else {
-                Instant::now().duration_since(self.start_time).as_secs()
-            };
-            let remaining_secs = self.duration * 60 - elapsed;
+    fn restart(&mut self, now: Instant) {
+        self.remaining = self.total;
+        self.last_tick = now;
+        self.paused = false;
+        self.frame = 0;
+    }
 
-            let percentage = (remaining_secs as f64 / (self.duration * 60) as f64) * 100.0;
-
-            let color = match percentage {
-                r if r > 66.0 => Color::LightMagenta,
-                r if r > 33.0 => Color::LightCyan,
-                _ => Color::LightRed,
-            };
-
-            let label = if remaining_secs >= 60 {
-                format!("{:02}:{:02}", remaining_secs / 60, remaining_secs % 60)
-            } else {
-                format!("00:{:02}", remaining_secs)
-            };
-
-            let gauge = Gauge::default()
-                .block(block)
-                .gauge_style(Style::default().fg(color))
-                .percent(percentage as u16)
-                .label(label);
-            f.render_widget(gauge, size);
-        })?;
-
-        Ok(())
+    fn draw<B: Backend>(&self, terminal: &mut Terminal<B>) -> io::Result<()> {
+        terminal
+            .draw(|f| {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(1)
+                    .constraints(
+                        [
+                            Constraint::Length(2),
+                            Constraint::Min(5),
+                            Constraint::Length(3),
+                            Constraint::Length(3),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(f.size());
+                let finished = self.remaining.is_zero();
+                let cat = if finished {
+                    " /\\_/\\\n( ^.^ )\n / > *   purr-fect. take a break!"
+                } else if self.paused {
+                    " /\\_/\\\n( -.- )\n / > z   holding your place"
+                } else if self.animate && self.frame / 4 % 2 == 1 {
+                    " /\\_/\\\n( o.o )\n / > /   one paw at a time"
+                } else {
+                    " /\\_/\\\n( o.o )\n / > \\   one paw at a time"
+                };
+                let color = if finished {
+                    Color::LightGreen
+                } else if self.paused {
+                    Color::Yellow
+                } else {
+                    Color::LightMagenta
+                };
+                f.render_widget(
+                    Paragraph::new("C A T M O D O R O   /   small steps, sharp focus")
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                    chunks[0],
+                );
+                f.render_widget(
+                    Paragraph::new(cat)
+                        .alignment(Alignment::Center)
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(" your focus companion "),
+                        )
+                        .style(Style::default().fg(color)),
+                    chunks[1],
+                );
+                let seconds =
+                    self.remaining.as_secs() + u64::from(self.remaining.subsec_nanos() > 0);
+                let state = if finished {
+                    "COMPLETE"
+                } else if self.paused {
+                    "PAUSED"
+                } else {
+                    "FOCUS"
+                };
+                let label = format!("{}  {:02}:{:02}", state, seconds / 60, seconds % 60);
+                f.render_widget(
+                    Gauge::default()
+                        .block(Block::default().borders(Borders::ALL))
+                        .gauge_style(Style::default().fg(color))
+                        .ratio(
+                            (self.remaining.as_secs_f64() / self.total.as_secs_f64())
+                                .clamp(0.0, 1.0),
+                        )
+                        .label(label),
+                    chunks[2],
+                );
+                f.render_widget(
+                    Paragraph::new(
+                        "[p / space] pause   [r] restart   [a] animation   [q / esc] quit",
+                    )
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(Color::Gray)),
+                    chunks[3],
+                );
+            })
+            .map(|_| ())
     }
 }
 
-fn run_app<B: Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut PomodoroApp,
-) -> Result<(), Box<dyn Error>> {
-    loop {
-        app.advance();
-        if app.finished {
-            break;
-        }
-        app.draw(terminal)?;
+// Drop also runs during unwinding, so terminal state survives errors and panics.
+struct TerminalSession;
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, crossterm::cursor::Show);
+    }
+}
 
+fn run(minutes: u64, animate: bool) -> Result<(), Box<dyn Error>> {
+    enable_raw_mode()?;
+    let _session = TerminalSession;
+    execute!(io::stdout(), EnterAlternateScreen)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    terminal.hide_cursor()?;
+    let mut app = PomodoroApp::new(minutes, animate);
+    loop {
+        app.tick(Instant::now());
+        app.draw(&mut terminal)?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('p') => app.toggle_pause(),
+                    KeyCode::Esc | KeyCode::Char('q') => break,
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
+                    KeyCode::Char('p') | KeyCode::Char(' ') => app.toggle_pause(Instant::now()),
+                    KeyCode::Char('r') => app.restart(Instant::now()),
+                    KeyCode::Char('a') => app.animate = !app.animate,
                     _ => {}
                 }
             }
         }
     }
-
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let matches = ClapApp::new("Rust Catmodoro Timer")
-        .version("1.0")
-        .author("Your Name")
-        .about("Manages a Catmodoro Timer")
+    let matches = App::new("Catmodoro")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("Jose Sustaita")
+        .about("A tiny terminal cat to keep your focus company")
         .arg(
             Arg::new("duration")
                 .short('d')
                 .long("duration")
                 .value_name("MINUTES")
-                .help("Sets the duration of the Catmodoro in minutes")
-                .takes_value(true),
+                .default_value("25")
+                .takes_value(true)
+                .validator(|value| match value.parse::<u64>() {
+                    Ok(1..=1440) => Ok(()),
+                    _ => Err("choose a whole number between 1 and 1440"),
+                })
+                .help("Focus session length (1–1440 minutes)"),
+        )
+        .arg(
+            Arg::new("no-animation")
+                .long("no-animation")
+                .help("Keep your cat still"),
         )
         .get_matches();
+    let minutes = matches.value_of("duration").unwrap().parse()?;
+    run(minutes, !matches.is_present("no-animation"))
+}
 
-    let duration_str = matches.value_of("duration").unwrap_or("25");
-    let duration = duration_str
-        .parse::<u64>()
-        .expect("Failed to parse duration");
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let result = panic::catch_unwind(|| {
-        enable_raw_mode().expect("Failed to enable raw mode");
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-            .expect("Failed to enter alternate screen and enable mouse capture");
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend).expect("Failed to create terminal");
-        let mut app = PomodoroApp::new(duration);
-
-        let res = run_app(&mut terminal, &mut app);
-
-        disable_raw_mode().expect("Failed to disable raw mode");
-        execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        )
-        .expect("Failed to leave alternate screen and disable mouse capture");
-        terminal.show_cursor().expect("Failed to show cursor");
-
-        if let Err(err) = res {
-            println!("Error: {:?}", err);
-        }
-    });
-
-    if let Err(_) = result {
-        disable_raw_mode()?;
-        println!("The application panicked, but the terminal was restored.");
+    #[test]
+    fn completion_saturates_instead_of_underflowing() {
+        let mut app = PomodoroApp::new(1, true);
+        app.tick(app.last_tick + Duration::from_secs(61));
+        assert_eq!(app.remaining, Duration::ZERO);
+        app.tick(app.last_tick + Duration::from_secs(10));
+        assert_eq!(app.remaining, Duration::ZERO);
     }
 
-    Ok(())
+    #[test]
+    fn pause_excludes_elapsed_time_and_freezes_animation() {
+        let mut app = PomodoroApp::new(1, true);
+        app.toggle_pause(app.last_tick + Duration::from_secs(10));
+        let frame = app.frame;
+        app.tick(app.last_tick + Duration::from_secs(20));
+        assert_eq!(app.remaining, Duration::from_secs(50));
+        assert_eq!(app.frame, frame);
+        app.toggle_pause(app.last_tick);
+        app.tick(app.last_tick + Duration::from_secs(5));
+        assert_eq!(app.remaining, Duration::from_secs(45));
+    }
+
+    #[test]
+    fn restart_restores_a_full_active_session() {
+        let mut app = PomodoroApp::new(1, false);
+        app.toggle_pause(app.last_tick + Duration::from_secs(20));
+        app.restart(app.last_tick);
+        assert_eq!(app.remaining, Duration::from_secs(60));
+        assert!(!app.paused);
+    }
+
+    #[test]
+    fn completion_can_draw_on_a_small_terminal() {
+        let mut app = PomodoroApp::new(1, false);
+        app.tick(app.last_tick + Duration::from_secs(60));
+        let mut terminal = Terminal::new(tui::backend::TestBackend::new(30, 12)).unwrap();
+        app.draw(&mut terminal).unwrap();
+    }
 }

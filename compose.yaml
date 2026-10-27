@@ -1,0 +1,8 @@
+name: catmodoro
+services:
+  catmodoro:
+    build: .
+    stdin_open: true
+    tty: true
+    environment:
+      TERM: ${TERM:-xterm-256color}

@@ -1,0 +1,114 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1200"
+  height="300"
+  viewBox="0 0 1200 300"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">CATMODORO — small steps, sharp focus</title>
+  <desc id="desc">
+    Animated project nameplate. RUST / TERMINAL / FOCUS. Artwork is decorative
+    and respects reduced-motion preferences.
+  </desc>
+  <style>
+    .bob,
+    .cloud {
+      animation: float 3s ease-in-out infinite;
+    }
+    .tail {
+      animation: twinkle 2s ease-in-out infinite;
+    }
+    .twinkle,
+    .blink {
+      animation: twinkle 1.8s ease-in-out infinite;
+    }
+    .orbit {
+      transform-origin: 146px 109px;
+      animation: orbit 35s linear infinite;
+    }
+    .pulse {
+      animation: twinkle 2s ease-in-out infinite;
+    }
+    .bar {
+      animation: twinkle 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+    @keyframes twinkle {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.3;
+      }
+    }
+    @keyframes orbit {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation: none !important;
+      }
+    }
+  </style>
+  <rect width="1200" height="300" rx="18" fill="#111d1a" />
+  <rect
+    x="14"
+    y="14"
+    width="1172"
+    height="272"
+    rx="10"
+    fill="none"
+    stroke="#3b4b40"
+  />
+  <circle cx="58" cy="56" r="5" fill="#c4a7e7" />
+  <g font-family="ui-monospace,monospace">
+    <text x="76" y="61" font-size="13" letter-spacing="3" fill="#c4a7e7">
+      JOSE SUSTAITA / THE WORKBENCH
+    </text>
+    <text
+      x="54"
+      y="145"
+      font-size="53"
+      font-weight="700"
+      letter-spacing="-2"
+      fill="#f5f1e6"
+    >
+      CATMODORO
+    </text>
+    <text x="58" y="191" font-size="20" fill="#bbc8bb">
+      small steps, sharp focus
+    </text>
+    <path d="M58 221h680" stroke="#3b4b40" />
+    <text x="58" y="255" font-size="13" letter-spacing="2" fill="#c4a7e7">
+      RUST / TERMINAL / FOCUS
+    </text>
+  </g>
+  <g transform="translate(840 26)">
+    <g
+      class="bob"
+      fill="none"
+      stroke="#c4a7e7"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M40 90V35l42 24q45-25 90 0l42-24v55q20 90-87 90T40 90z" />
+      <path
+        d="M84 105h1m83 0h1M116 125l11 8 11-8m-11 8v12m0-3q-12 12-22 0m22 0q12 12 22 0"
+      />
+      <path class="tail" d="M213 140q55-60 60-5t-40 55" />
+    </g>
+  </g>
+</svg>
